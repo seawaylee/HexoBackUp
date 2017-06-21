@@ -1,6 +1,7 @@
 ---
 title: InfluxDB学习笔记（一）- InfluxDB简介
 date: 2017-06-12 12:36:28
+comments: true
 tags: [Nosql]
 ---
 

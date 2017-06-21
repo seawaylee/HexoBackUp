@@ -17,7 +17,11 @@ Mapreduce核心功能是将用户编写的业务逻辑代码和自带默认组�
 * （2）而一旦将单机版程序扩展到集群来分布式运行，将极大增加程序的复杂度和开发难度
 * （3）引入mapreduce框架后，开发人员可以将绝大部分工作集中在业务逻辑的开发上，而将分布式计算中的复杂性交由框架来处理
 
+
+<!--more-->
+
 ## 1.2 MR框架结构核心及运行机制
+
 
 ### 1.2.1 结构
 
@@ -28,8 +32,6 @@ Mapreduce核心功能是将用户编写的业务逻辑代码和自带默认组�
 * 3、ReduceTask：负责reduce阶段的整个数据处理流程
 
 ![](mapreduce运行全流程.png)
-
-<!--more-->
 
 **流程解析**
 
@@ -50,6 +52,8 @@ Mapreduce核心功能是将用户编写的业务逻辑代码和自带默认组�
 
 将待处理数据执行逻辑切片（即按照一个特定切片大小，将待处理数据划分成逻辑上的多个split），然后**每一个split分配一个mapTask并行实例处理**
 这段逻辑及形成的切片规划描述文件，由FileInputFormat实现类的getSplits()方法完成，其过程如下图：
+
+![](切片2.png)
 
 ![](切片示意.png)
 
@@ -144,6 +148,15 @@ job.setNumReduceTasks(4);
     2. 在job中设置：  job.setCombinerClass(CustomCombiner.class)
 5. combiner能够应用的前提是不能影响最终的业务逻辑。而且，combiner的输出kv应该跟reducer的输入kv类型要对应起来
 
+## 1.5 Partitioner
+
+Mapreduce中会将mapTask输出的kv对，按照相同key分组，然后分发给不同的reduceTask
+默认的分发规则为：根据key的hashcode%reducetask数来分发
+组件Partitioner能够改写数据分发（分组）
+
+## 1.6 GroupingComparator
+
+自定义GroupingComparator可以将Map输出的K-V按照自己的需求进行聚合
 
 # 2 MR 编程实践
 
@@ -306,4 +319,95 @@ public class WordCountDriver
 }
 
 ```
+
+# 3 MapReduce参数优化
+
+## 3.1 资源相关参数
+
+**以下参数是在用户自己的mr应用程序中配置就可以生效**
+
+* (1) mapreduce.map.memory.mb: 一个Map Task可使用的资源上限（单位:MB），默认为1024。如果Map Task实际使用的资源量超过该值，则会被强制杀死。
+* (2) mapreduce.reduce.memory.mb: 一个Reduce Task可使用的资源上限（单位:MB），默认为1024。如果Reduce Task实际使用的资源量超过该值，则会被强制杀死。
+* (3) mapreduce.map.java.opts: Map Task的JVM参数，你可以在此配置默认的java heap size等参数, e.g.
+* “-Xmx1024m -verbose:gc -Xloggc:/tmp/@taskid@.gc” （@taskid@会被Hadoop框架自动换为相应的taskid）, 默认值: “”
+* (4) mapreduce.reduce.java.opts: Reduce Task的JVM参数，你可以在此配置默认的java heap size等参数, e.g.
+* “-Xmx1024m -verbose:gc -Xloggc:/tmp/@taskid@.gc”, 默认值: “”
+* (5) mapreduce.map.cpu.vcores: 每个Map task可使用的最多cpu core数目, 默认值: 1
+* (6) mapreduce.reduce.cpu.vcores: 每个Reduce task可使用的最多cpu core数目, 默认值: 1
+
+**以下在yarn启动之前就配置在服务器的配置文件中才能生效**
+
+* (7) yarn.scheduler.minimum-allocation-mb	  1024   给应用程序container分配的最小内存
+* (8) yarn.scheduler.maximum-allocation-mb	  8192	给应用程序container分配的最大内存
+* (9) yarn.scheduler.minimum-allocation-vcores	1	
+* (10)yarn.scheduler.maximum-allocation-vcores	32
+* (11)yarn.nodemanager.resource.memory-mb   8192  
+
+**shuffle性能优化的关键参数，应在yarn启动之前就配置好**
+
+mapreduce.task.io.sort.mb   100         //shuffle的环形缓冲区大小，默认100m
+mapreduce.map.sort.spill.percent   0.8    //环形缓冲区溢出的阈值，默认80%
+
+## 3.2 容错相关参数
+
+* (1) mapreduce.map.maxattempts: 每个Map Task最大重试次数，一旦重试参数超过该值，则认为Map Task运行失败，默认值：4。
+* (2) mapreduce.reduce.maxattempts: 每个Reduce Task最大重试次数，一旦重试参数超过该值，则认为Map Task运行失败，默认值：4。
+* (3) mapreduce.map.failures.maxpercent: 当失败的Map Task失败比例超过该值为，整个作业则失败，默认值为0. 如果你的应用程序允许丢弃部分输入数据，则该该值设为一个大于0的值，比如5，表示如果有低于5%的Map Task失败（如果一个Map Task重试次数超过mapreduce.map.maxattempts，则认为这个Map Task失败，其对应的输入数据将不会产生任何结果），整个作业扔认为成功。
+* (4) mapreduce.reduce.failures.maxpercent: 当失败的Reduce Task失败比例超过该值为，整个作业则失败，默认值为0.
+* (5) mapreduce.task.timeout: Task超时时间，经常需要设置的一个参数，该参数表达的意思为：如果一个task在一定时间内没有任何进入，即不会读取新的数据，也没有输出数据，则认为该task处于block状态，可能是卡住了，也许永远会卡主，为了防止因为用户程序永远block住不退出，则强制设置了一个该超时时间（单位毫秒），默认是300000。如果你的程序对每条输入数据的处理时间过长（比如会访问数据库，通过网络拉取数据等），建议将该参数调大，该参数过小常出现的错误提示是“AttemptID:attempt_14267829456721_123456_m_000224_0 Timed out after 300 secsContainer killed by the ApplicationMaster.”。
+
+## 3.3 本地运行mapreduce 作业
+
+设置以下几个参数:
+mapreduce.framework.name=local
+mapreduce.jobtracker.address=local
+fs.defaultFS=local
+
+## 3.4 效率和稳定性相关参数
+
+* (1) mapreduce.map.speculative: 是否为Map Task打开推测执行机制，默认为false
+* (2) mapreduce.reduce.speculative: 是否为Reduce Task打开推测执行机制，默认为false
+* (3) mapreduce.job.user.classpath.first & mapreduce.task.classpath.user.precedence：当同一个class同时出现在用户jar包和hadoop jar中时，优先使用哪个jar包中的class，默认为false，表示优先使用hadoop jar中的class。
+* (4) mapreduce.input.fileinputformat.split.minsize: FileInputFormat做切片时的最小切片大小，(5)mapreduce.input.fileinputformat.split.maxsize:  FileInputFormat做切片时的最大切片大小(切片的默认大小就等于blocksize，即 134217728)
+
+
+# 4 MR编程小结
+
+MR在编程的时候，基本上一个固化的模式，没有太多可灵活改变的地方，除了以下几处：
+
+- 1、输入数据接口：InputFormat —> FileInputFormat(文件类型数据读取的通用抽象类)  DBInputFormat （数据库数据读取的通用抽象类） 默认使用的实现类是： TextInputFormat  `job.setInputFormatClass(TextInputFormat.class)`
+
+    TextInputFormat的功能逻辑是：一次**读一行**文本，然后将该行的起始偏移量作为key，行内容作为value返回
+   
+- 2、逻辑处理接口： Mapper  
+   完全需要用户自己去实现其中  map()   setup()   clean()   
+   
+- 3、Map输出的结果在shuffle阶段会被partition以及sort，此处有两个接口可自定义：
+    - **Partitioner**
+    
+		有默认实现 HashPartitioner，逻辑是  根据key和numReduces来返回一个分区号； key.hashCode()&Integer.MAXVALUE % numReduces
+	通常情况下，用默认的这个HashPartitioner就可以，如果业务上有特别的需求，可以自定义
+    - **Comparable**
+
+		当我们用自定义的对象作为key来输出时，就必须要实现WritableComparable接口，override其中的compareTo()方法
+
+- 4、Reduce端的数据分组比较接口 ： **Groupingcomparator**
+    reduceTask拿到输入数据（一个partition的**所有**数据）后，首先需要对数据进行**分组**，其分组的**默认原则是key相同**，然后对每一组kv数据调用一次reduce()方法，并且将这一组kv中的**第一个**kv的key作为参数传给reduce的key，将这一组数据的value的迭代器传给reduce()的values参数
+	
+    利用上述这个机制，我们可以实现一个**高效的分组取最大值的逻辑**：
+
+    - 自定义一个bean对象用来封装我们的数据，然后改写其compareTo方法产生倒序排序的效果
+    - 然后自定义一个**Groupingcomparator**，将bean对象的分组逻辑改成按照我们的业务分组id来分组（比如订单号）
+	这样，我们要取的最大值就是reduce()方法中传进来key
+	
+
+- 5、逻辑处理接口：Reducer
+	完全需要用户自己去实现其中  reduce()   setup()   clean()   
+
+- 6、输出数据接口： OutputFormat  ---> 有一系列子类  FileOutputformat  DBoutputFormat  .....
+	默认实现类是TextOutputFormat，功能逻辑是：  将每一个KV对向目标文本文件中**输出为一行**
+	
+	
+	
+	
 

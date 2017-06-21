@@ -1,5 +1,5 @@
 ---
-title: Chapter02 装备Bean 
+title: SpringInAction读书笔记(二) 装备Bean 
 date: 2017-03-09 22:17
 tags: [JavaWeb,Spring]
 ---

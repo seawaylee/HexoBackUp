@@ -1,5 +1,5 @@
 ---
-title: Chapter13 Spring Cache
+title: SpringInAction读书笔记(十)  Spring Cache
 date: 2017-03-09 23:50:48
 tags: [JavaWeb,Spring]
 ---

@@ -1,7 +1,7 @@
 ---
-title: Chapter07 SpringMVC高级技术 
+title: SpringInAction读书笔记(七) SpringMVC高级技术 
 date: 2017-03-09 23:44:02
-tags: []
+tags: [JavaWeb,Spring]
 ---
 
 ## 7.1 SpringMVC的环境搭建方式

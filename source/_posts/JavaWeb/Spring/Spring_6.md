@@ -1,5 +1,5 @@
 ---
-title: Chapter06 渲染Web试图 
+title: SpringInAction读书笔记(六) 渲染Web试图 
 date: 2017-03-09 23:42:53
 tags: [JavaWeb,Spring]
 ---

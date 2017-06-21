@@ -1,5 +1,5 @@
 ---
-title: JVM学习笔记（基础知识）
+title: JVM学习笔记（一）- 基础知识
 date: 2017-04-19 20:39:28
 tags: [Java基础,JVM]
 ---

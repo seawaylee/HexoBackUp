@@ -1,5 +1,5 @@
 ---
-title: ElasticSearch学习笔记 - 概览
+title: ElasticSearch学习笔记（一）- 快速入门
 date: 2017-03-09 11:59:15
 tags: [搜索]
 ---

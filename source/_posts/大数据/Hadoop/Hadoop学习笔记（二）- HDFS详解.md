@@ -202,6 +202,11 @@ layoutVersion=-47
 
 $dfs.namenode.name.dir/current目录下在format的同时也会生成fsimage和edits文件，及其对应的md5校验文件。
 
+## 2.4 NameNode的SafeMode
+
+NameNode在刚启动时，内存中只有文件名、文件块的BlockId、文件的副本量，但不知道Block所在的DataNode。
+NameNode需要等待所有的DataNode向他汇报自身持有的块信息，NameNode才能在元数据中补全文件块信息中的位置信息。
+只有当NameNode找到99.8%(默认)的块位置信息时，才会退出安全模式，正常对外提供服务。
 
 # 3 HDFS API
 
