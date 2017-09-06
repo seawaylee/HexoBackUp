@@ -8,10 +8,12 @@ date: 2017-03-10 02:20:42
 
 ## 在读
 
+<!--
 [《剑指Offer》](https://book.douban.com/subject/25953851/)
 - 推荐指数: ★★★★★
 - 评价: 程序 = 数据结构 + 算法，不多bb。
 <br>
+-->
 
 [《重构》](https://book.douban.com/subject/4262627/)
 - 推荐指数: ★★★★★
@@ -21,6 +23,11 @@ date: 2017-03-10 02:20:42
 [《Effective Java 中文第2版》](https://book.douban.com/subject/3360807/)
 - 推荐指数: ★★★★★
 - 评价: 大家都说是神书，看起来挺吃力的。
+<br>
+
+[《Flask Web开发：基于Python的Web应用开发实战》](https://book.douban.com/subject/26274202/)
+- 推荐指数: ★★★★★
+- 评价: 关于Flask评价最好的一本书。
 <br>
 
 
