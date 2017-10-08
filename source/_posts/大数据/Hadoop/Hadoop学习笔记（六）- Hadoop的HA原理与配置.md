@@ -1,7 +1,7 @@
 ---
 title: Hadoop学习笔记（六）- Hadoop的HA原理与配置
 date: 2017-06-13 20:03:06
-tags: [Hadoop]
+tags: [大数据,Hadoop]
 ---
 
 

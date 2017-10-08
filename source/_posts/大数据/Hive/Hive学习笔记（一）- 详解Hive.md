@@ -12,7 +12,7 @@ tags: [大数据,Hive]
 Hive是基于Hadoop的一个数据仓库工具，可以将结构化的数据文件映射为一张数据库表，并提供类SQL查询功能。
 
 **为什么使用Hive**
-
+    
 - 直接使用Hadoop所面临的问题
     - 学习成本高
     - 一般项目周期要求短
@@ -29,12 +29,11 @@ Hive是基于Hadoop的一个数据仓库工具，可以将结构化的数据文�
 - 延展性： Hive支持用户自定义函数，用户可以根据自己的需求来实现自己的函数
 - 容错： 良好的容错性，节点出现问题SQL仍然可以完成执行
 
-
 <!--more-->
 
 ## 1.2 架构
 
-![](Hive学习笔记（一）-%20详解Hive/Hive架构.jpg)
+![](14983216998950.jpg)
 
 JobTracker是Hadoop1.x中的ResouceManager + AppMaster
 TaskTracker相当于NodeManager + YarnChild
@@ -55,7 +54,7 @@ TaskTracker相当于NodeManager + YarnChild
 
 Hive利用HDFS存储数据，利用MapReduce查询数据
 
-![](Hive学习笔记（一）-%20详解Hive/Hive与Hadoop关系.jpg)
+![](14986658358207.jpg)
 
 ## 1.4 Hive与传统数据库对比
 
@@ -163,7 +162,8 @@ CREATE [EXTERNAL] TABLE [IF NOT EXISTS] table_name
 1. CREATE TABLE 创建一个指定名字的表。如果相同名字的表已经存在，则抛出异常；用户可以用 IF NOT EXISTS 选项来忽略这个异常。
 
 2. EXTERNAL关键字可以让用户创建一个外部表，在建表的同时指定一个指向实际数据的路径（LOCATION），Hive 创建内部表时，会将数据移动到数据仓库指向的路径；若创建外部表，仅记录数据所在的路径，不对数据的位置做任何改变。在删除表的时候，内部表的元数据和数据会被一起删除，而外部表只删除元数据，不删除数据。
-3. LIKE 允许用户复制现有的表结构，但是不复制数据。
+
+3. PARTITIONED 表示根据某一个key(不在create table里面)对数据进行分区，体现在HDFS上就是 table目录下有n个不同的分区文件夹(country=China,country=USA)
 
 4. ROW FORMAT 
     DELIMITED [FIELDS TERMINATED BY char] [COLLECTION ITEMS TERMINATED BY char] 
@@ -268,6 +268,11 @@ LOAD DATA [LOCAL] INPATH 'filepath' [OVERWRITE] INTO
 TABLE tablename [PARTITION (partcol1=val1, partcol2=val2 ...)]
 ```
 
+
+```sql
+load data local inpath '/Users/lixiwei-mac/app/data/hive_tmp/metrics.data' into table metrics;
+```
+
 1. Load 操作只是单纯的复制/移动操作，将数据文件移动到 Hive 表对应的位置。
 
 2. filepath：
@@ -291,8 +296,8 @@ TABLE tablename [PARTITION (partcol1=val1, partcol2=val2 ...)]
 ```sql
 INSERT OVERWRITE TABLE tablename1 [PARTITION (partcol1=val1, partcol2=val2 ...)] select_statement1 FROM from_statement
 ```
-**Multiple inserts:**
 
+**Multiple inserts:**
 
 ```sql
 FROM from_statement 
@@ -306,20 +311,16 @@ INSERT OVERWRITE TABLE tablename1 [PARTITION (partcol1=val1, partcol2=val2 ...)]
 INSERT OVERWRITE TABLE tablename PARTITION (partcol1[=val1], partcol2[=val2] ...) select_statement FROM from_statement
 ```
 
-**导出表数据**
+
+```sql
+insert into table metrics_buck select * from metrics distribute by (type);
+```
+
+导出表数据
 
 
 ```sql
 INSERT OVERWRITE [LOCAL] DIRECTORY directory1 SELECT ... FROM ...
-```
-
-**Multiple inserts:**
-
-
-```sql
-FROM from_statement
-INSERT OVERWRITE [LOCAL] DIRECTORY directory1 select_statement1
-[INSERT OVERWRITE [LOCAL] DIRECTORY directory2 select_statement2] ...
 ```
 
 
@@ -403,7 +404,7 @@ SELECT a.val, b.val, c.val FROM a JOIN b ON (a.key = b.key1)
    
 **3、join 时，每次 map/reduce 任务的逻辑：**
     
-    reducer 会**缓存 join 序列中除了最后一个表的所有表的记录**，再通过最后一个表将结果序列化到文件系统。这一实现有助于在 reduce 端减少内存的使用量。实践中，应该**把最大的那个表写在最后**（否则会因为缓存浪费大量内存）。例如：
+reducer 会**缓存 join 序列中除了最后一个表的所有表的记录**，再通过最后一个表将结果序列化到文件系统。这一实现有助于在 reduce 端减少内存的使用量。实践中，应该**把最大的那个表写在最后**（否则会因为缓存浪费大量内存）。例如：
 
 ```sql
 SELECT a.val, b.val, c.val FROM a
@@ -460,6 +461,307 @@ SELECT a.val1, a.val2, b.val, c.val
   LEFT OUTER JOIN c ON (a.key = c.key)
 ```
 先 join a 表到 b 表，丢弃掉所有 join key 中不匹配的记录，然后用这一中间结果和 c 表做 join。这一表述有一个不太明显的问题，就是当一个 key 在 a 表和 c 表都存在，但是 b 表中不存在的时候：整个记录在第一次 join，即 a JOIN b 的时候都被丢掉了（包括a.val1，a.val2和a.key），然后我们再和 c 表 join 的时候，如果 c.key 与 a.key 或 b.key 相等，就会得到这样的结果：NULL, NULL, NULL, c.val
+
+
+## 2.4 HQL小结
+
+
+```sql
+show databases;
+show tables;
+desc test;
+```
+
+-------------
+### 2.4.1 分桶表示例
+
+- 创建分桶表
+
+    ```sql
+    
+    drop table stu_buck;
+    create table stu_buck(Sno int,Sname string,Sex string,Sage int,Sdept string)
+    clustered by(Sno) 
+    sorted by(Sno DESC)
+    into 4 buckets
+    row format delimited
+    fields terminated by ',';
+    ```
+
+- 设置变量,设置分桶为true, 设置reduce数量是分桶的数量个数
+
+    - set hive.enforce.bucketing = true;
+    - set mapreduce.job.reduces=4;
+    - insert overwrite table student_buck
+    - select * from student cluster by(Sno) sort by(Sage);  报错,cluster 和 sort 不能共存
+
+- 往创建的分通表插入数据(插入数据需要是已分桶, 且排序的)
+    - 可以使用distribute by(sno) sort by(sno asc)   或是排序和分桶的字段相同的时候使用Cluster by(字段)
+    - 注意使用cluster by  就等同于分桶+排序(sort)
+
+    ```    sql
+    insert into table stu_buck
+    select Sno,Sname,Sex,Sage,Sdept from student distribute by(Sno) sort by(Sno asc);
+    
+    insert overwrite table stu_buck
+    select * from student distribute by(Sno) sort by(Sno asc);
+    
+    insert overwrite table stu_buck
+    select * from student cluster by(Sno);
+    
+    ```
+------------------------
+
+### 2.4.2 保存select查询结果的几种方式：
+
+1. 将查询结果保存到一张新的hive表中
+
+   ```sql
+   create table t_tmp
+   as
+   select * from t_p;
+   
+   ```
+    
+2. 将查询结果保存到一张已经存在的hive表中
+
+   ```sql
+   insert into  table t_tmp
+   select * from t_p;
+   
+   ```
+3. 将查询结果保存到指定的文件目录（可以是本地，也可以是hdfs）
+
+   ```sql
+   insert overwrite local directory '/home/hadoop/test'
+   select * from t_p;
+   
+   insert overwrite directory '/aaa/test'
+   select * from t_p;
+
+   ```
+
+
+-----------------------------------
+
+### 2.4.3 关于hive中的各种join
+
+1. 准备数据
+
+    1,a
+    2,b
+    3,c
+    4,d
+    7,y
+    8,u
+    
+    2,bb
+    3,cc
+    7,yy
+    9,pp
+
+
+
+2. 建表：
+
+
+    ```sql
+    create table a(id int,name string)
+    row format delimited fields terminated by ',';
+    
+    create table b(id int,name string)
+    row format delimited fields terminated by ',';
+    
+    ```
+3. 导入数据
+
+    ```sql
+        load data local inpath '/home/hadoop/a.txt' into table a;
+        load data local inpath '/home/hadoop/b.txt' into table b;  
+    ```
+
+4. 实验
+
+    - inner join
+
+
+        ```sql
+        select * from a inner join b on a.id=b.id;
+        +-------+---------+-------+---------+--+
+        | a.id  | a.name  | b.id  | b.name  |
+        +-------+---------+-------+---------+--+
+        | 2     | b       | 2     | bb      |
+        | 3     | c       | 3     | cc      |
+        | 7     | y       | 7     | yy      |
+        +-------+---------+-------+---------+--+
+    ```
+
+
+   - left join
+        
+        ```sql
+        select * from a left join b on a.id=b.id;
+                +-------+---------+-------+---------+--+
+                | a.id  | a.name  | b.id  | b.name  |
+                +-------+---------+-------+---------+--+
+                | 1     | a       | NULL  | NULL    |
+                | 2     | b       | 2     | bb      |
+                | 3     | c       | 3     | cc      |
+                | 4     | d       | NULL  | NULL    |
+                | 7     | y       | 7     | yy      |
+                | 8     | u       | NULL  | NULL    |
+                +-------+---------+-------+---------+--+
+        
+        ```
+
+   - right join
+
+        `select * from a right join b on a.id=b.id;`
+
+   - outer join
+
+        ```sql
+        select * from a full outer join b on a.id=b.id;
+        +-------+---------+-------+---------+--+
+        | a.id  | a.name  | b.id  | b.name  |
+        +-------+---------+-------+---------+--+
+        | 1     | a       | NULL  | NULL    |
+        | 2     | b       | 2     | bb      |
+        | 3     | c       | 3     | cc      |
+        | 4     | d       | NULL  | NULL    |
+        | 7     | y       | 7     | yy      |
+        | 8     | u       | NULL  | NULL    |
+        | NULL  | NULL    | 9     | pp      |
+        +-------+---------+-------+---------+--+
+         
+        ```
+   - left semi join
+
+        ```sql
+        select * from a left semi join b on a.id = b.id;
+        +-------+---------+--+
+        | a.id  | a.name  |
+        +-------+---------+--+
+        | 2     | b       |
+        | 3     | c       |
+        | 7     | y       |
+        +-------+---------+--+
+        
+        ```
+        
+-------------
+
+### 2.4.4 其他
+
+- 多重插入：
+
+
+    ```sql
+    from student
+    insert into table student_p partition(part='a')
+    select * where Sno<95011;
+    insert into table student_p partition(part='a')
+    select * where Sno<95011;
+    
+    ```
+
+
+- 导出数据到本地
+
+    ```sql
+    insert overwrite local directory '/home/hadoop/student.txt'
+    select * from student;
+    
+    ```
+
+- UDF案例
+
+
+    ```sql
+    create table rat_json(line string) row format delimited;
+    load data local inpath '/home/hadoop/rating.json' into table rat_json;
+    
+    drop table if exists t_rating;
+    create table t_rating(movieid string,rate int,timestring string,uid string)
+    row format delimited fields terminated by '\t';
+    
+    insert overwrite table t_rating
+    select split(parsejson(line),'\t')[0]as movieid,split(parsejson(line),'\t')[1] as rate,split(parsejson(line),'\t')[2] as timestring,split(parsejson(line),'\t')[3] as uid from rat_json limit 10;
+    
+    ```
+
+
+- 内置jason函数
+
+
+    ```sql
+    select get_json_object(line,'$.movie') as moive,get_json_object(line,'$.rate') as rate  from rat_json limit 10;
+    
+    ```
+
+
+- transform案例
+
+    1. 先加载rating.json文件到hive的一个原始表 rat_json
+
+        ```sql
+        create table rat_json(line string) row format delimited;
+        load data local inpath '/home/hadoop/rating.json' into table rat_json;
+        
+        ```
+    2. 需要解析json数据成四个字段，插入一张新的表 t_rating
+
+        ```sql
+        insert overwrite table t_rating
+        select get_json_object(line,'$.movie') as moive,get_json_object(line,'$.rate') as rate  from rat_json;
+        
+        ```
+3. 使用transform+python的方式去转换unixtime为weekday
+
+    - 先编辑一个python脚本文件
+        
+        `vi weekday_mapper.py`
+
+        ```python
+        
+        #!/bin/python
+        import sys
+        import datetime
+        
+        for line in sys.stdin:
+          line = line.strip()
+          movieid, rating, unixtime,userid = line.split('\t')
+          weekday = datetime.datetime.fromtimestamp(float(unixtime)).isoweekday()
+          print '\t'.join([movieid, rating, str(weekday),userid])
+    ```
+
+    - 保存文件
+    - 然后，将文件加入hive的classpath：
+        - hive>add FILE /home/hadoop/weekday_mapper.py;
+        - hive>create TABLE u_data_new as
+
+    ```sql
+    SELECT
+      TRANSFORM (movieid, rate, timestring,uid)
+      USING 'python weekday_mapper.py'
+      AS (movieid, rate, weekday,uid)
+    FROM t_rating;
+    
+    select distinct(weekday) from u_data_new limit 10;    
+    ```
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # 3 Hive Shell参数
@@ -526,4 +828,144 @@ set mapred.reduce.tasks=100;
 
 
 
+
+# 4 Hive函数
+
+**创建测试表**
+
+- `vim dual.data` 只写一个空格
+- 创建表 
+    - `use school;`
+    - `create table dual(id int);`
+- `load data local inpath '/Users/lixiwei-mac/app/data/hive_tmp/dual.data' into table dual;` 导入数据
+- 测试
+    - `select substr('NikoBelic',0,4) from dual;`
+        
+        ```text
+        +-------+--+
+        |  _c0  |
+        +-------+--+
+        | Niko  |
+        +-------+--+
+        ```
+
+
+## 4.1 内置运算符
+
+[内容较多，见《Hive官方文档》](https://cwiki.apache.org/confluence/display/Hive/LanguageManual+UDF#LanguageManualUDF-StringOperators)
+
+## 4.2 内置函数
+
+[内容较多，见《Hive官方文档》](https://cwiki.apache.org/confluence/display/Hive/LanguageManual+UDF#LanguageManualUDF-StringOperators)
+
+## 4.3 Hive自定义函数和Transform
+
+当Hive提供的内置函数无法满足你的业务处理需要时，此时就可以考虑使用用户自定义函数（UDF：user-defined function）。
+
+### 4.3.1 自定义函数类别
+
+- UDF  作用于单个数据行，产生一个数据行作为输出。（数学函数，字符串函数）
+- UDAF（用户定义聚集函数）：接收多个输入数据行，并产生一个输出数据行。（count，max）
+
+### 4.3.2 UDF开发实例
+
+1. 先开发一个java类，继承UDF，并重载evaluate方法
+
+    ```java
+    package cn.itcast.bigdata.udf
+    import org.apache.hadoop.hive.ql.exec.UDF;
+    import org.apache.hadoop.io.Text;
+    
+    public final class Lower extends UDF{
+    	public Text evaluate(final Text s){
+    		if(s==null){return null;}
+    		return new Text(s.toString().toLowerCase());
+    	}
+    }
+    ```
+    
+2. 打成jar包上传到服务器
+3. 将jar包添加到hive的classpath
+    - hive>add JAR /home/hadoop/udf.jar;
+    - 创建临时函数与开发好的java class关联
+    - 即可在hql中使用自定义的函数strip 
+    - Select strip(name),age from t_test;
+4. 创建临时函数与开发好的java class关联
+    - `Hive>create temporary function toprovince as 'cn.itcast.bigdata.udf.ToProvince';`
+5. 即可在hql中使用自定义的函数strip 
+    - `Select strip(name),age from t_test;`
+
+### 4.3.3 Transform实现
+
+* Hive的 TRANSFORM 关键字提供了在SQL中调用自写脚本的功能
+* 适合实现Hive中没有的功能又不想写UDF的情况
+
+```sql
+CREATE TABLE u_data_new (
+  movieid INT,
+  rating INT,
+  weekday INT,
+  userid INT)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY '\t';
+
+add FILE weekday_mapper.py;
+
+INSERT OVERWRITE TABLE u_data_new
+SELECT
+  TRANSFORM (movieid, rating, unixtime,userid)
+  USING 'python weekday_mapper.py'
+  AS (movieid, rating, weekday,userid)
+FROM u_data;
+```
+
+* 使用示例1：下面这句sql就是借用了weekday_mapper.py对数据进行了处理.
+
+```python
+#!/bin/python
+import sys
+import datetime
+
+for line in sys.stdin:
+  line = line.strip()
+  movieid, rating, unixtime,userid = line.split('\t')
+  weekday = datetime.datetime.fromtimestamp(float(unixtime)).isoweekday()
+  print '\t'.join([movieid, rating, str(weekday),userid])
+```
+
+* 其中weekday_mapper.py内容如下
+
+```python
+#!/bin/python
+import sys
+import datetime
+
+for line in sys.stdin:
+  line = line.strip()
+  movieid, rating, unixtime,userid = line.split('\t')
+  weekday = datetime.datetime.fromtimestamp(float(unixtime)).isoweekday()
+  print '\t'.join([movieid, rating, str(weekday),userid])
+```
+
+* 使用示例2：下面的例子则是使用了shell的cat命令来处理数据
+
+
+```sql
+FROM invites a INSERT OVERWRITE TABLE events SELECT TRANSFORM(a.foo, a.bar) AS (oof, rab) USING '/bin/cat' WHERE a.ds > '2008-08-09';
+```
+
+# 5 遇到的问题问题
+
+1. UDF 载入Jar成功 但添加function时ClassNotFound。
+
+    - 如果确定create function xx as 'ClassPackageName' 中的ClassPackageName没有输入错误，那么可能是导出的Jar出现了问题。
+    - Idea编辑器下，导出jar时不要选择 from moudles 而要选择empty,并创建META-INF，不要引入依赖jar包
+    - 退出Hive服务重新连接并导入即可
+
+2. 创建UDF方法出现异常  Unsupported major.minor version 52.0
+    
+    - Hadoop的JDK版本和jar的导出版本不一致，52.0是jdk8的版本号
+    - 修改Hadoop的hadoop-env.sh，将jdk7的路径修改为jdk8即可
+
+     
 

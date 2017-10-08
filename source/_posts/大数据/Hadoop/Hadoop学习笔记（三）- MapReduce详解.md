@@ -1,7 +1,7 @@
 ---
 title: Hadoop学习笔记（三）- MapReduce详解
 date: 2017-05-12 13:55:17
-tags: [Hadoop]
+tags: [大数据,Hadoop]
 ---
 
 

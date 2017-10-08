@@ -1,7 +1,7 @@
 ---
 title: Hadoop学习笔记（四）- MapReduce运行剖析 
 date: 2017-06-12 20:00:26
-tags: [Hadoop]
+tags: [大数据,Hadoop]
 ---
 
 

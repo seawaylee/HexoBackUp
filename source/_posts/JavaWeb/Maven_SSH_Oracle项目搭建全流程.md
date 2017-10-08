@@ -24,12 +24,15 @@ sudo service apache2 restart   # 重启项目
 ```
 访问 `https://${SVN_IP}/svn/${project_name}` 查看项目结构
 
+
+<!--more-->
+
 ## 1.2 SSH框架搭建 - Maven
 
 **项目结构**
 ![](14985736654697.jpg)
 
-<!--more-->
+
 
 ### 1.2.1 创建MavenWeb项目
 ![](14985714190385.jpg)
